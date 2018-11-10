@@ -53,9 +53,9 @@ class cPreprocess(object):
     """
 
     def __init__(self):
-        self.RawDataLocation = '/project/bioinformatics/DLLab/shared/Collab-Aashoo/WholeHeartSegmentation'
-        self.ProcessedDataLocation = '/project/bioinformatics/DLLab/shared/Collab-Aashoo/WholeHeartSegmentation'
-        self.TrainDataLocation = os.path.join(self.RawDataLocation, 'mr_train')
+        self.RawDataLocation = '/project/hackathon/hackers09/shared/Data'
+        self.ProcessedDataLocation = '/project/hackathon/hackers09/shared/Data'
+        self.TrainDataLocation = os.path.join(self.RawDataLocation, 'mr_train_resizedV2')
         self.TestDataLocation = os.path.join(self.ProcessedDataLocation, 'mr_test')
         self.Dimension = 3 # 3 dimensional image
 
@@ -289,33 +289,33 @@ class cPreprocess(object):
 
 #######The following is an attempt to find the dimensions of the box needed to isolate the heart######
 # Find the dimensions for the largest possible box to isolate all hearts
-boxWidth = 0
-boxHeight = 0
-boxDepth = 0
-
-dCenters = {}
-
-for Root, Dirs, Files in os.walk('/project/hackathon/hackers09/shared/Data/mr_train_resizedV2'):
-    Files.sort()
-    for iFile, File in enumerate(Files):
-        imageWidthLine, widthCenter = Preprocesser.fFindBoxWidth('File')
-        widthCenterPoint = widthCenter[1]
-        if imageWidthLine > boxWidth:
-            boxWidth = imageWidthLine
-        imageHeightLine, heightCenter = Preprocesser.fFindBoxHeight('File')
-        heightCenterPoint = heightCenter[0]
-        if imageHeightLine > boxHeight:
-            boxHeight = imageHeightLine
-        imageDepthLine, depthCenter = Preprocesser.fFindBoxDepth('File')
-        depthCenterPoint = depthCenter[2]
-        if imageDepthLine > boxDepth:
-            boxDepth = imageDepthLine
-        centerHeart = [heightCenter, widthCenter,depthCenter]
-        dCenters[iFile]=centerHeart
-
-
-boxDimensions = [boxHeight,boxWidth,boxDepth]
-print(boxDimensions)
+# boxWidth = 0
+# boxHeight = 0
+# boxDepth = 0
+#
+# dCenters = {}
+#
+# for Root, Dirs, Files in os.walk('/project/hackathon/hackers09/shared/Data/mr_train_resizedV2'):
+#     Files.sort()
+#     for iFile, File in enumerate(Files):
+#         imageWidthLine, widthCenter = Preprocesser.fFindBoxWidth('File')
+#         widthCenterPoint = widthCenter[1]
+#         if imageWidthLine > boxWidth:
+#             boxWidth = imageWidthLine
+#         imageHeightLine, heightCenter = Preprocesser.fFindBoxHeight('File')
+#         heightCenterPoint = heightCenter[0]
+#         if imageHeightLine > boxHeight:
+#             boxHeight = imageHeightLine
+#         imageDepthLine, depthCenter = Preprocesser.fFindBoxDepth('File')
+#         depthCenterPoint = depthCenter[2]
+#         if imageDepthLine > boxDepth:
+#             boxDepth = imageDepthLine
+#         centerHeart = [heightCenter, widthCenter,depthCenter]
+#         dCenters[iFile]=centerHeart
+#
+#
+# boxDimensions = [boxHeight,boxWidth,boxDepth]
+# print(boxDimensions)
 
 
 def fCoregister(NIIFile1, NIIFile2, NIIFile2Label, bSegmentation=False):
@@ -542,43 +542,41 @@ for Root, Dirs, Files in os.walk(Preprocesser.TrainDataLocation):
         # load only the image files, load the labels separately
         if not 'label' in File:
 
-            if File == 'mr_train_1001_image.nii.gz':
+            if File == 'mr_train_1018_image.nii.gz':
                 # set this file up as the one to coregister to
                 NIIFile1 = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, File))
-                cSlicer = cSliceNDice(NIIFile1)
-                NIIFile1 = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
+                # cSlicer = cSliceNDice(NIIFile1)
+                # NIIFile1 = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
                 print('Reference file ' + File + ' is cropped')
                 sitk.WriteImage(NIIFile1, os.path.join(
-                    '/project/bioinformatics/DLLab/shared/Collab-Aashoo/'
-                    'WholeHeartSegmentation/CoregTestAll', (File[:-7] + 'CoregTest.nii.gz')))
+                    '/project/hackathon/hackers09/shared/Data/CoregTestV2All', (File[:-7] + 'CoregTest.nii.gz')))
 
                 # transform the label file the same
                 LabelFile=File[:-12]+'label.nii.gz'
                 NIIFileLabel1 = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, LabelFile))
-                cSlicer = cSliceNDice(NIIFileLabel1)
-                NIIFileLabel1 = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
+                # cSlicer = cSliceNDice(NIIFileLabel1)
+                # NIIFileLabel1 = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
                 print('Reference Label file ' + File + ' is cropped')
                 sitk.WriteImage(NIIFileLabel1, os.path.join(
-                    '/project/bioinformatics/DLLab/shared/Collab-Aashoo/'
-                    'WholeHeartSegmentation/CoregTestAll', (File[:-12] + 'labelCoregTest.nii.gz')))
+                    '/project/hackathon/hackers09/shared/Data/CoregTestV2All', (File[:-12] + 'labelCoregTest.nii.gz')))
 
 
-            else:
+    for iFile,File in enumerate(Files):
+        if not 'label' in File:
+            if not File=='mr_train_1018_image.nii.gz':
                 # coregister to the above file
                 LabelFile=File[:-12]+'label.nii.gz'
                 NIIFile = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, File))
                 NIIFileLabel = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, LabelFile))
-                cSlicer = cSliceNDice(NIIFile)
-                NIIFile = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
-                cSlicer = cSliceNDice(NIIFileLabel)
-                NIIFileLabel = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
+                # cSlicer = cSliceNDice(NIIFile)
+                # NIIFile = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
+                # cSlicer = cSliceNDice(NIIFileLabel)
+                # NIIFileLabel = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
                 print('File number ' + str(iFile) + ' and its label are cropped')
                 NIICoreg, NIICoregLabel = fCoregister(NIIFile1, NIIFile, NIIFileLabel)
                 print('File number ' + str(iFile) + ' and its label are coregistered')
                 sitk.WriteImage(NIICoreg, os.path.join(
-                    '/project/bioinformatics/DLLab/shared/Collab-Aashoo/'
-                    'WholeHeartSegmentation/CoregTestAll', (File[:-7] + 'CoregTest.nii.gz')))
+                    '/project/hackathon/hackers09/shared/Data/CoregTestV2All', (File[:-7] + 'CoregTest.nii.gz')))
                 sitk.WriteImage(NIICoregLabel, os.path.join(
-                    '/project/bioinformatics/DLLab/shared/Collab-Aashoo/'
-                    'WholeHeartSegmentation/CoregTestAll', (File[:-12] + 'labelCoregTest.nii.gz')))
+                    '/project/hackathon/hackers09/shared/Data/CoregTestV2All', (File[:-12] + 'labelCoregTest.nii.gz')))
 

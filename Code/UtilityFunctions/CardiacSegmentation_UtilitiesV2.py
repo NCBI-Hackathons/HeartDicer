@@ -15,6 +15,7 @@ import sys
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
 
+os.environ['CUDA_VISIBLE_DEVICES'] = "1"
 
 def fLogDiceloss(aPredictedVolumes, aActualVolumes):
     """
@@ -53,9 +54,9 @@ class cPreprocess(object):
     """
 
     def __init__(self):
-        self.RawDataLocation = '/project/bioinformatics/DLLab/shared/Collab-Aashoo/WholeHeartSegmentation'
-        self.ProcessedDataLocation = '/project/bioinformatics/DLLab/shared/Collab-Aashoo/WholeHeartSegmentation'
-        self.TrainDataLocation = os.path.join(self.RawDataLocation, 'mr_train')
+        self.RawDataLocation = '/project/hackathon/hackers09/shared/Data'
+        self.ProcessedDataLocation = '/project/hackathon/hackers09/shared/Data'
+        self.TrainDataLocation = os.path.join(self.RawDataLocation, 'mr_train_resizedV2')
         self.TestDataLocation = os.path.join(self.ProcessedDataLocation, 'mr_test')
         self.Dimension = 3 # 3 dimensional image
 
@@ -306,6 +307,7 @@ class cPreprocess(object):
         # cResampler.SetReferenceImage(self.ReferenceImage)
         # NIIResampled=cResampler.execute(NIIFile)
         # NIIResampled=sitk.Resample(NIIFile, self.ReferenceImage)
+        print(HeartCenter)
 
         NIIResampled = sitk.ResampleImageFilter()
         NIIResampled.SetOutputOrigin(HeartCenter)
@@ -331,9 +333,11 @@ class cPreprocess(object):
             NIIResampled.SetInterpolator(sitk.sitkBSpline)
 
         NIIResized = NIIResampled.Execute(NIIFile)
+        NIIResizedArray = sitk.GetArrayFromImage(NIIResized)
+        NIIResizedPos = sitk.GetImageFromArray(NIIResizedArray)
         # print("Resized:")
         # print(NIIResized.GetSize())
-        return NIIResized
+        return NIIResizedPos
 
     def fSaveITKV2(self, sNIIFileName, sOutDir,aHeartCenter,aBoxDimensions):
         """
@@ -343,204 +347,204 @@ class cPreprocess(object):
         :return:
         """
 
-        # NIIFile = self.fFetchRawDataFile((os.path.join(self.TrainDataLocation, sNIIFileName)))
+        NIIFile = self.fFetchRawDataFile((os.path.join(self.TrainDataLocation, sNIIFileName)))
         # print(NIIFile.GetSize())
-        NIIFile = sNIIFileName
         bLabel = 'label' in sNIIFileName
         # NIIFileResized = self.fResizeImage(NIIFile, is_label = bLabel)
+        print(aHeartCenter)
         NIIFileResized = self.fIsolateHeart(NIIFile,aBoxDimensions,aHeartCenter, is_label=bLabel)
         print(NIIFileResized.GetSize())
         sitk.WriteImage(NIIFileResized, os.path.join(sOutDir, sNIIFileName))
 
-def fCoregister(NIIFile1, NIIFile2, NIIFile2Label, bSegmentation=False):
-    """
-    adapted from: http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/Python_html/60_Registration_Introduction.html
-    Takes 2 .nii files and linearly coregisters them
-    TO NIIFILE1 AS REFERENCE
-    :param NIIFile1: first .nii file
-    :param NIIFile2: second .nii file
-    :param bSegmentation: set to true if file is segmentation file, does Nearest Neighbor
-        interpolation rather than linear interpolation
-    :return: the transform to coregister the .nii files
-    """
-    # first, initialize an aligining transform
-    cAlign = sitk.CenteredTransformInitializer(NIIFile1, NIIFile2,
-                                               sitk.Euler3DTransform(),
-                                               sitk.CenteredTransformInitializerFilter.GEOMETRY)
+# def fCoregister(NIIFile1, NIIFile2, NIIFile2Label, bSegmentation=False):
+#     """
+#     adapted from: http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/Python_html/60_Registration_Introduction.html
+#     Takes 2 .nii files and linearly coregisters them
+#     TO NIIFILE1 AS REFERENCE
+#     :param NIIFile1: first .nii file
+#     :param NIIFile2: second .nii file
+#     :param bSegmentation: set to true if file is segmentation file, does Nearest Neighbor
+#         interpolation rather than linear interpolation
+#     :return: the transform to coregister the .nii files
+#     """
+#     # first, initialize an aligining transform
+#     cAlign = sitk.CenteredTransformInitializer(NIIFile1, NIIFile2,
+#                                                sitk.Euler3DTransform(),
+#                                                sitk.CenteredTransformInitializerFilter.GEOMETRY)
+#
+#     # initialize the registration method
+#     cRegistration = sitk.ImageRegistrationMethod()
+#
+#     cRegistration.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
+#     cRegistration.SetMetricSamplingStrategy(cRegistration.RANDOM)
+#     cRegistration.SetMetricSamplingPercentage(0.01)
+#     cRegistration.SetInterpolator(sitk.sitkLinear)
+#
+#     cRegistration.SetOptimizerAsGradientDescent(learningRate=1.0, numberOfIterations=100, convergenceMinimumValue=1e-6,
+#                                    convergenceWindowSize=10)
+#     cRegistration.SetOptimizerScalesFromPhysicalShift()
+#
+#     # Setup for the multi-resolution framework.
+#     cRegistration.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
+#     cRegistration.SetSmoothingSigmasPerLevel(smoothingSigmas=[2, 1, 0])
+#     cRegistration.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
+#
+#     cRegistration.SetInitialTransform(cAlign, inPlace=False)
+#
+#     cTransform = cRegistration.Execute(sitk.Cast(NIIFile1, sitk.sitkFloat32),
+#                                                   sitk.Cast(NIIFile2, sitk.sitkFloat32))
+#
+#     # if the image is a segmentation image, resample using knn, rather than linear interpolation
+#     NIIFile2CoregToNIIFile1 = sitk.Resample(NIIFile2, NIIFile1, cTransform,
+#                                                 sitk.sitkLinear, 0.0, NIIFile1.GetPixelID())
+#
+#     NIIFile2LabelCoregToNIIFile1 = sitk.Resample(NIIFile2Label, NIIFile1, cTransform,
+#                                                 sitk.sitkNearestNeighbor, 0.0, NIIFile1.GetPixelID())
+#
+#     return NIIFile2CoregToNIIFile1, NIIFile2LabelCoregToNIIFile1
 
-    # initialize the registration method
-    cRegistration = sitk.ImageRegistrationMethod()
-
-    cRegistration.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
-    cRegistration.SetMetricSamplingStrategy(cRegistration.RANDOM)
-    cRegistration.SetMetricSamplingPercentage(0.01)
-    cRegistration.SetInterpolator(sitk.sitkLinear)
-
-    cRegistration.SetOptimizerAsGradientDescent(learningRate=1.0, numberOfIterations=100, convergenceMinimumValue=1e-6,
-                                   convergenceWindowSize=10)
-    cRegistration.SetOptimizerScalesFromPhysicalShift()
-
-    # Setup for the multi-resolution framework.
-    cRegistration.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
-    cRegistration.SetSmoothingSigmasPerLevel(smoothingSigmas=[2, 1, 0])
-    cRegistration.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
-
-    cRegistration.SetInitialTransform(cAlign, inPlace=False)
-
-    cTransform = cRegistration.Execute(sitk.Cast(NIIFile1, sitk.sitkFloat32),
-                                                  sitk.Cast(NIIFile2, sitk.sitkFloat32))
-
-    # if the image is a segmentation image, resample using knn, rather than linear interpolation
-    NIIFile2CoregToNIIFile1 = sitk.Resample(NIIFile2, NIIFile1, cTransform,
-                                                sitk.sitkLinear, 0.0, NIIFile1.GetPixelID())
-
-    NIIFile2LabelCoregToNIIFile1 = sitk.Resample(NIIFile2Label, NIIFile1, cTransform,
-                                                sitk.sitkNearestNeighbor, 0.0, NIIFile1.GetPixelID())
-
-    return NIIFile2CoregToNIIFile1, NIIFile2LabelCoregToNIIFile1
-
-class cSliceNDice(object):
-    """ This class contains all the methods for augmenting and slicing the image
-    The general function types contained herein are as follows:
-    -Functions to take subsections of the data
-    -functions to spatially jitter the data
-    -functions to rotate the data
-    """
-    def __init__(self, NIIFile):
-        self.NIIFile=NIIFile
-
-    def fJitter(self, flSigma = 10, aDirection = 'any'):
-        """ This function translates a function using a gaussian
-        process defined by flSigma, (std of the 3D gaussian)
-        :param:flSigma: the std of a gaussian used to move the image
-        :param:aDirection: a vector of the aDirection to translate the image
-            default: 'any' means that the aDirection is chosen randomly
-        :return: NIIFile, translated
-        """
-
-        if aDirection == 'any':
-            aDirection = np.array([np.random.normal(0, 1) for i in range(3)])
-
-        # Normalize the direction vector
-        flNorm = float(np.linalg.norm(aDirection, ord=1))
-        if flNorm == 0:
-            raise ValueError("'direction' vector has length 0"
-                             "\ndivide by 0 error when normalizing direction vector")
-        else:
-            aDirection = np.array(aDirection)
-            aDirection = (aDirection/flNorm)
-
-        # Generate the step size based on the flSigma parameter
-        flStep = abs(np.random.normal(0, flSigma))
-
-        # Initialize the translation class
-        cTranslator = sitk.TranslationTransform(3)
-        cTranslator.SetOffset((aDirection[0]*flStep, aDirection[1]*flStep, aDirection[2]*flStep))
-
-        # Translate the NIIFile
-        NIIFileTranslated = sitk.Resample(self.NIIFile, cTranslator)
-
-        return NIIFileTranslated
-
-    def fPatch(self, aCenter = 'any', iSize = 64, aLimits=None):
-        """ Cuts a small sub-patch out of the larger image for data augmentation
-        :param center: the center of the subsampled region
-        :param size: the size of the subsampled patch
-        :return: a new NII file of the subsampled region
-        """
-        # Set the point where the patch will be (by default, doesn't go over the edges
-        # of the image)
-        flNIIWidth=self.NIIFile.GetSize()[0]
-
-        if aCenter=='any':
-            flXRange = np.random.uniform(iSize/2, flNIIWidth-iSize/2)
-            flYRange = np.random.uniform(iSize/2, flNIIWidth-iSize/2)
-            flZRange = np.random.uniform(iSize/2, flNIIWidth-iSize/2)
-            aCenter=[flXRange, flYRange, flZRange]
-
-
-        # Initialize the crop class and size of the cube
-        # cCropper=sitk.CropImageFilter()
-        if aLimits is None: # if the limits are given, use those, otherwise make a cube around the center
-            aLimits=[iSize/2, iSize/2, iSize/2]
-        lsLowerBound=[int(iC - iL) for iC, iL in zip(aCenter, aLimits)]
-        lsUpperBound=[int(iC + iL) for iC, iL in zip(aCenter, aLimits)]
-        # cCropper.SetLowerBoundaryCropSize(lsLowerBound)
-        # cCropper.SetUpperBoundaryCropSize(lsUpperBound)
-
-        # Create the patch
-        NIIPatch = self.NIIFile[lsLowerBound[0]:lsUpperBound[0],
-                                lsLowerBound[1]:lsUpperBound[1],
-                                lsLowerBound[2]:lsUpperBound[2]
-                               ]
-
-        return NIIPatch
-
-    def fWarp1D(self, flMaxScale=0.2, bIsotropic=True):
-        """Warps a .nii file by flMaxScale percent up or down
-        :param max_scale: the percent up or down an image dimension will be scaled
-        :param bIsotropic: if true, the image will be scaled isotropically (all dimensions
-            scaled the same amount), else each dimension will be separately scaled up or down
-        :return: rescaled .nii file
-        """
-        # Generate the scaling factor
-        if bIsotropic:
-            flScaleFactor = np.random.uniform(-flMaxScale, flMaxScale)
-        else:
-            aScaleFactor = [np.random.uniform(-flMaxScale, flMaxScale),
-                            np.random.uniform(-flMaxScale, flMaxScale),
-                            np.random.uniform(-flMaxScale, flMaxScale)
-                            ]
-
-        # Initialize the transformer
-        cTransform=sitk.AffineTransform(3)
-        if bIsotropic:
-            aWarp=np.zeros((3,3,3))
-            aWarp[0,0,0]=1+flScaleFactor
-            aWarp[1,1,1]=1+flScaleFactor
-            aWarp[2,2,2]=1+flScaleFactor
-        else:
-            aWarp=np.zeros((3,3,3))
-            aWarp[0,0,0]=1+aScaleFactor[0]
-            aWarp[1,1,1]=1+aScaleFactor[1]
-            aWarp[2,2,2]=1+aScaleFactor[2]
-
-        cTransform.SetMatrix(aWarp.ravel())
-
-        # Do the resampling
-        NIIWarped = sitk.Resample(self.NIIFile, cTransform)
-
-        return NIIWarped
-
-    def fRotate(self, flMaxTheta=5, flMaxPhi=5):
-        """Rotates a .nii file by flMax Theta and flMaxPhi
-        :param max_scale: the percent up or down an image dimension will be scaled
-        :param bIsotropic: if true, the image will be scaled isotropically (all dimensions
-            scaled the same amount), else each dimension will be separately scaled up or down
-        :return: rescaled .nii file
-        """
-        # Change Theta and Phi to radians
-        flMaxTheta=flMaxTheta*np.pi/180
-        flMaxPhi=flMaxPhi*np.pi/180
-
-        # Initialize the transformer
-        cTransform=sitk.AffineTransform(3)
-
-        flScaleFactor=0
-        aWarp=np.zeros((3,3,3))
-        aWarp[0,0,0]=1+flScaleFactor
-        aWarp[1,1,1]=1+flScaleFactor
-        aWarp[2,2,2]=1+flScaleFactor
-
-        cTransform.SetMatrix(aWarp.ravel())
-
-        # Do the resampling
-        NIIWarped = sitk.Resample(self.NIIFile, cTransform)
-
-        return NIIWarped
-
-    def fShear(self, flMaxShear, bIsotropic=True):
-        return self
+# class cSliceNDice(object):
+#     """ This class contains all the methods for augmenting and slicing the image
+#     The general function types contained herein are as follows:
+#     -Functions to take subsections of the data
+#     -functions to spatially jitter the data
+#     -functions to rotate the data
+#     """
+#     def __init__(self, NIIFile):
+#         self.NIIFile=NIIFile
+#
+#     def fJitter(self, flSigma = 10, aDirection = 'any'):
+#         """ This function translates a function using a gaussian
+#         process defined by flSigma, (std of the 3D gaussian)
+#         :param:flSigma: the std of a gaussian used to move the image
+#         :param:aDirection: a vector of the aDirection to translate the image
+#             default: 'any' means that the aDirection is chosen randomly
+#         :return: NIIFile, translated
+#         """
+#
+#         if aDirection == 'any':
+#             aDirection = np.array([np.random.normal(0, 1) for i in range(3)])
+#
+#         # Normalize the direction vector
+#         flNorm = float(np.linalg.norm(aDirection, ord=1))
+#         if flNorm == 0:
+#             raise ValueError("'direction' vector has length 0"
+#                              "\ndivide by 0 error when normalizing direction vector")
+#         else:
+#             aDirection = np.array(aDirection)
+#             aDirection = (aDirection/flNorm)
+#
+#         # Generate the step size based on the flSigma parameter
+#         flStep = abs(np.random.normal(0, flSigma))
+#
+#         # Initialize the translation class
+#         cTranslator = sitk.TranslationTransform(3)
+#         cTranslator.SetOffset((aDirection[0]*flStep, aDirection[1]*flStep, aDirection[2]*flStep))
+#
+#         # Translate the NIIFile
+#         NIIFileTranslated = sitk.Resample(self.NIIFile, cTranslator)
+#
+#         return NIIFileTranslated
+#
+#     def fPatch(self, aCenter = 'any', iSize = 64, aLimits=None):
+#         """ Cuts a small sub-patch out of the larger image for data augmentation
+#         :param center: the center of the subsampled region
+#         :param size: the size of the subsampled patch
+#         :return: a new NII file of the subsampled region
+#         """
+#         # Set the point where the patch will be (by default, doesn't go over the edges
+#         # of the image)
+#         flNIIWidth=self.NIIFile.GetSize()[0]
+#
+#         if aCenter=='any':
+#             flXRange = np.random.uniform(iSize/2, flNIIWidth-iSize/2)
+#             flYRange = np.random.uniform(iSize/2, flNIIWidth-iSize/2)
+#             flZRange = np.random.uniform(iSize/2, flNIIWidth-iSize/2)
+#             aCenter=[flXRange, flYRange, flZRange]
+#
+#
+#         # Initialize the crop class and size of the cube
+#         # cCropper=sitk.CropImageFilter()
+#         if aLimits is None: # if the limits are given, use those, otherwise make a cube around the center
+#             aLimits=[iSize/2, iSize/2, iSize/2]
+#         lsLowerBound=[int(iC - iL) for iC, iL in zip(aCenter, aLimits)]
+#         lsUpperBound=[int(iC + iL) for iC, iL in zip(aCenter, aLimits)]
+#         # cCropper.SetLowerBoundaryCropSize(lsLowerBound)
+#         # cCropper.SetUpperBoundaryCropSize(lsUpperBound)
+#
+#         # Create the patch
+#         NIIPatch = self.NIIFile[lsLowerBound[0]:lsUpperBound[0],
+#                                 lsLowerBound[1]:lsUpperBound[1],
+#                                 lsLowerBound[2]:lsUpperBound[2]
+#                                ]
+#
+#         return NIIPatch
+#
+#     def fWarp1D(self, flMaxScale=0.2, bIsotropic=True):
+#         """Warps a .nii file by flMaxScale percent up or down
+#         :param max_scale: the percent up or down an image dimension will be scaled
+#         :param bIsotropic: if true, the image will be scaled isotropically (all dimensions
+#             scaled the same amount), else each dimension will be separately scaled up or down
+#         :return: rescaled .nii file
+#         """
+#         # Generate the scaling factor
+#         if bIsotropic:
+#             flScaleFactor = np.random.uniform(-flMaxScale, flMaxScale)
+#         else:
+#             aScaleFactor = [np.random.uniform(-flMaxScale, flMaxScale),
+#                             np.random.uniform(-flMaxScale, flMaxScale),
+#                             np.random.uniform(-flMaxScale, flMaxScale)
+#                             ]
+#
+#         # Initialize the transformer
+#         cTransform=sitk.AffineTransform(3)
+#         if bIsotropic:
+#             aWarp=np.zeros((3,3,3))
+#             aWarp[0,0,0]=1+flScaleFactor
+#             aWarp[1,1,1]=1+flScaleFactor
+#             aWarp[2,2,2]=1+flScaleFactor
+#         else:
+#             aWarp=np.zeros((3,3,3))
+#             aWarp[0,0,0]=1+aScaleFactor[0]
+#             aWarp[1,1,1]=1+aScaleFactor[1]
+#             aWarp[2,2,2]=1+aScaleFactor[2]
+#
+#         cTransform.SetMatrix(aWarp.ravel())
+#
+#         # Do the resampling
+#         NIIWarped = sitk.Resample(self.NIIFile, cTransform)
+#
+#         return NIIWarped
+#
+#     def fRotate(self, flMaxTheta=5, flMaxPhi=5):
+#         """Rotates a .nii file by flMax Theta and flMaxPhi
+#         :param max_scale: the percent up or down an image dimension will be scaled
+#         :param bIsotropic: if true, the image will be scaled isotropically (all dimensions
+#             scaled the same amount), else each dimension will be separately scaled up or down
+#         :return: rescaled .nii file
+#         """
+#         # Change Theta and Phi to radians
+#         flMaxTheta=flMaxTheta*np.pi/180
+#         flMaxPhi=flMaxPhi*np.pi/180
+#
+#         # Initialize the transformer
+#         cTransform=sitk.AffineTransform(3)
+#
+#         flScaleFactor=0
+#         aWarp=np.zeros((3,3,3))
+#         aWarp[0,0,0]=1+flScaleFactor
+#         aWarp[1,1,1]=1+flScaleFactor
+#         aWarp[2,2,2]=1+flScaleFactor
+#
+#         cTransform.SetMatrix(aWarp.ravel())
+#
+#         # Do the resampling
+#         NIIWarped = sitk.Resample(self.NIIFile, cTransform)
+#
+#         return NIIWarped
+#
+#     def fShear(self, flMaxShear, bIsotropic=True):
+#         return self
 
 ##############What follows is an example of how to use the preprocesser##################
 
@@ -571,37 +575,39 @@ Preprocesser=cPreprocess()
 
 #######The following is an attempt to find the dimensions of the box needed to isolate the heart######
 # Find the dimensions for the largest possible box to isolate all hearts
-# boxWidth = 0
-# boxHeight = 0
-# boxDepth = 0
-#
-# dCenters = {}
-#
-# for Root, Dirs, Files in os.walk('/project/hackathon/hackers09/shared/Data/mr_train_resizedV2', topdown=True):
-#     Files.sort()
-#     for iFile, File in enumerate(Files):
-#         bCategory = 'label' in File
-#         if bCategory:
-#             imageWidthLine, widthCenter = Preprocesser.fFindBoxWidth(File)
-#             widthCenterPoint = widthCenter[1]
-#             if imageWidthLine > boxWidth:
-#                 boxWidth = imageWidthLine
-#             imageHeightLine, heightCenter = Preprocesser.fFindBoxHeight(File)
-#             heightCenterPoint = heightCenter[0]
-#             if imageHeightLine > boxHeight:
-#                 boxHeight = imageHeightLine
-#             imageDepthLine, depthCenter = Preprocesser.fFindBoxDepth(File)
-#             depthCenterPoint = depthCenter[2]
-#             if imageDepthLine > boxDepth:
-#                 boxDepth = imageDepthLine
-#             centerHeart = [heightCenterPoint, widthCenterPoint,depthCenterPoint]
-#             dCenters[iFile]=centerHeart
-#
-# boxDimensions = [boxHeight,boxWidth,boxDepth]
-# print(boxDimensions)
-#
-# NIIFile = Preprocesser.fFetchRawDataFile((os.path.join(Preprocesser.TrainDataLocation, 'mr_train_1001_image.nii.gz')))
-# outDir = '/project/hackathon/hackers09/shared/Data/mr_train_resizedV3'
+boxWidth = 0
+boxHeight = 0
+boxDepth = 0
+
+dCenters = {}
+
+for Root, Dirs, Files in os.walk('/project/hackathon/hackers09/shared/Data/mr_train_resizedV2', topdown=True):
+    Files.sort()
+    for iFile, File in enumerate(Files):
+        bCategory = 'label' in File
+        if bCategory:
+            imageWidthLine, widthCenter = Preprocesser.fFindBoxWidth(File)
+            widthCenterPoint = widthCenter[1]
+            if imageWidthLine > boxWidth:
+                boxWidth = imageWidthLine
+            imageHeightLine, heightCenter = Preprocesser.fFindBoxHeight(File)
+            heightCenterPoint = heightCenter[0]
+            if imageHeightLine > boxHeight:
+                boxHeight = imageHeightLine
+            imageDepthLine, depthCenter = Preprocesser.fFindBoxDepth(File)
+            depthCenterPoint = depthCenter[2]
+            if imageDepthLine > boxDepth:
+                boxDepth = imageDepthLine
+            centerHeart = [heightCenterPoint, widthCenterPoint,depthCenterPoint]
+            dCenters[iFile]=centerHeart
+
+boxDimensions = [boxHeight,boxWidth,boxDepth]
+print(boxDimensions)
+print(dCenters)
+
+Image01 ='mr_train_1001_image.nii.gz'
+outDir = '/project/hackathon/hackers09/shared/Data/mr_train_resizedV3'
+Preprocesser.fSaveITKV2(Image01,outDir,dCenters[1], boxDimensions)
 
 # do rough coregistration on all files
 # for Root, Dirs, Files in os.walk(Preprocesser.TrainDataLocation):
