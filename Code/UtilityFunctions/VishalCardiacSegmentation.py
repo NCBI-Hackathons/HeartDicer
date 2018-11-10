@@ -18,6 +18,7 @@ import random
 import matplotlib.pyplot as plt
 
 
+
 def fLogDiceloss(aPredictedVolumes, aActualVolumes):
     """
     This function returns the log of the dice score between two sets
@@ -59,8 +60,8 @@ class cPreprocess(object):
         #self.RawDataLocation = '/project/bioinformatics/DLLab/shared/Collab-Aashoo/WholeHeartSegmentation'
         self.ProcessedDataLocation = '/project/hackathon/hackers09/shared/Data'
         #self.ProcessedDataLocation = '/project/bioinformatics/DLLab/shared/Collab-Aashoo/WholeHeartSegmentation'
-        self.TrainDataLocation = os.path.join(self.RawDataLocation, 'mr_train')
-        self.TestDataLocation = os.path.join(self.ProcessedDataLocation, 'mr_test')
+        self.TrainDataLocation = os.path.join(self.RawDataLocation, 'CoregTestV2All')
+        self.TestDataLocation = os.path.join(self.ProcessedDataLocation, 'CoregTestV2All')
         self.Dimension = 3 # 3 dimensional image
 
         # Initialize the reference image that other images will be resampled based on
@@ -234,7 +235,16 @@ class cSliceNDice(object):
     def __init__(self, NIIFile):
         self.NIIFile=NIIFile
 
-    def fJitter(self, flSigma = 10, aDirection = 'any'):
+    def fJitterv2(self):
+        x_translation, y_translation, z_translation = (50, 0, 0)
+
+        affine = sitk.AffineTransform(3)
+        affine.SetTranslation((x_translation, y_translation, z_translation))
+        resampled = sitk.Resample(self.NIIFile, affine)
+        return resampled
+
+
+    def fJitter(self,  aDirection = 'any'):
         """ This function translates a function using a gaussian
         process defined by flSigma, (std of the 3D gaussian)
         :param:flSigma: the std of a gaussian used to move the image
@@ -243,6 +253,7 @@ class cSliceNDice(object):
         :return: NIIFile, translated
         """
 
+        flSigma = 50
         if aDirection == 'any':
             aDirection = np.array([np.random.normal(0, 1) for i in range(3)])
 
@@ -262,9 +273,11 @@ class cSliceNDice(object):
         cTranslator = sitk.TranslationTransform(3)
         cTranslator.SetOffset((aDirection[0]*flStep, aDirection[1]*flStep, aDirection[2]*flStep))
 
+        NIIFile1 = self.NIIFile
         # Translate the NIIFile
-        NIIFileTranslated = sitk.Resample(self.NIIFile, cTranslator, sitk.Method)
-
+        #NIIFileTranslated = sitk.Resample(self.NIIFile, File1, cTranslator)
+        NIIFileTranslated = sitk.Resample(self.NIIFile, NIIFile1, cTranslator,
+                      sitk.sitkNearestNeighbor, 0.0, NIIFile1.GetPixelID())
         return NIIFileTranslated
 
     def fPatch(self, aCenter = 'any', iSize = 64, aLimits=None):
@@ -301,7 +314,19 @@ class cSliceNDice(object):
 
         return NIIPatch
 
-    def fWarp1D(self, flMaxScale=0.05, bIsotropic=False):
+    def fWarpIDv2(self):
+        x_scale, y_scale, z_scale = 3.0, 0.7, 0.5
+
+
+
+        affine = sitk.AffineTransform(3)
+        affine.Scale((x_scale))
+        resampled = sitk.Resample(self.NIIFile, affine)
+
+        return resampled
+
+
+    def fWarp1D(self):
         """Warps a .nii file by flMaxScale percent up or down
         :param max_scale: the percent up or down an image dimension will be scaled
         :param bIsotropic: if true, the image will be scaled isotropically (all dimensions
@@ -309,6 +334,9 @@ class cSliceNDice(object):
         :return: rescaled .nii file
         """
         # Generate the scaling factor
+
+        flMaxScale = 0.05
+        bIsotropic = False
         if bIsotropic:
             flScaleFactor = np.random.uniform(-flMaxScale, flMaxScale)
         else:
@@ -330,14 +358,45 @@ class cSliceNDice(object):
             aWarp[1,1,1]=1+aScaleFactor[1]
             aWarp[2,2,2]=1+aScaleFactor[2]
 
-        cTransform.SetMatrix(aWarp.ravel())
+        cTransform.SetMatrix(aWarp)
 
         # Do the resampling
         NIIWarped = sitk.Resample(self.NIIFile, cTransform)
 
         return NIIWarped
 
-    def fRotate(self, flMaxTheta):
+
+    def random_three_vector(self):
+
+        """
+        Generates a random 3D unit vector (direction) with a uniform spherical distribution
+        Algo from http://stackoverflow.com/questions/5408276/python-uniform-spherical-distribution
+        :return:
+        """
+        phi = np.random.uniform(0,np.pi*2)
+        costheta = np.random.uniform(-1,1)
+
+        theta = np.arccos( costheta )
+        x = np.sin( theta) * np.cos( phi )
+        y = np.sin( theta) * np.sin( phi )
+        z = np.cos( theta )
+        return (x,y,z)
+
+    def fRotatev2(self):
+        degrees = 20
+
+
+        affine = sitk.AffineTransform(3)
+        radians = np.pi * degrees / 180.
+        affine.Rotate(1, 2, 30.0, pre= False)
+        resampled = sitk.Resample(self.NIIFile, affine)
+        return resampled
+
+
+
+
+
+    def fRotate(self):
         """Rotates a .nii file by flMax Theta and flMaxPhi
         :param max_scale: the percent up or down an image dimension will be scaled
         :param bIsotropic: if true, the image will be scaled isotropically (all dimensions
@@ -346,22 +405,27 @@ class cSliceNDice(object):
         """
         # Change Theta and Phi to radians
         #flMaxTheta = random.uniform(0,15)
-        flMaxTheta = 180
+        flMaxTheta = .05
         flMaxTheta=flMaxTheta*np.pi/180
 
 
         # Initialize the transformer
         cTransform=sitk.AffineTransform(3)
 
-        units = [0, 1]
-        aUnitVector = [random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)]
-        l = aUnitVector[0]/math.sqrt(math.pow(aUnitVector[0], 2) + math.pow(aUnitVector[1], 2) + math.pow(aUnitVector[2], 2))
-        m = aUnitVector[1]/math.sqrt(math.pow(aUnitVector[0], 2) + math.pow(aUnitVector[1], 2) + math.pow(aUnitVector[2], 2))
-        n = aUnitVector[2]/math.sqrt(math.pow(aUnitVector[0], 2) + math.pow(aUnitVector[1], 2) + math.pow(aUnitVector[2], 2))
+        tUnitVector = self.random_three_vector()
 
-        aRotationMatrix=np.zeros((3,3))
+        units = [0, 1]
+        l = tUnitVector[0]
+        m = tUnitVector[1]
+        n = tUnitVector[2]
+        #aUnitVector = [random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)]
+        #l = aUnitVector[0]/math.sqrt(math.pow(aUnitVector[0], 2) + math.pow(aUnitVector[1], 2) + math.pow(aUnitVector[2], 2))
+        #m = aUnitVector[1]/math.sqrt(math.pow(aUnitVector[0], 2) + math.pow(aUnitVector[1], 2) + math.pow(aUnitVector[2], 2))
+        #n = aUnitVector[2]/math.sqrt(math.pow(aUnitVector[0], 2) + math.pow(aUnitVector[1], 2) + math.pow(aUnitVector[2], 2))
+
+        aRotationMatrix = np.zeros(shape =(3,3))
         aRotationMatrix[0][0] = l*l*(1-math.cos(flMaxTheta) + math.cos(flMaxTheta))
-        aRotationMatrix[0][1] = m*l*(1-math.cos(flMaxTheta)) - n*math.sin(flMaxTheta)
+        aRotationMatrix[0][1]  = m*l*(1-math.cos(flMaxTheta)) - n*math.sin(flMaxTheta)
         aRotationMatrix[0][2] = n*l*(1-math.cos(flMaxTheta)) + m*math.cos(flMaxTheta)
         aRotationMatrix[1][0] = l*m*(1-math.cos(flMaxTheta)) + n*math.sin(flMaxTheta)
         aRotationMatrix[1][1] = m*m*(1-math.cos(flMaxTheta)) + math.cos(flMaxTheta)
@@ -372,16 +436,16 @@ class cSliceNDice(object):
 
         cTransform.SetMatrix(aRotationMatrix.ravel())
 
-        NIIWarped = sitk.Resample(self.NIIFile, cTransform)
+        NIIRotated = sitk.Resample(self.NIIFile, cTransform)
       #  NIIWarpedLabel=sitk.Resample(NIIFileLabel, cTransform)
 
 
-        return NIIWarped
+        return NIIRotated
 
 
 
     def fShear(self, flMaxShear, bIsotropic=True):
-        return self
+            return self
 
 ##############What follows is an example of how to use the preprocesser##################
 
@@ -416,47 +480,26 @@ for Root, Dirs, Files in os.walk(Preprocesser.TrainDataLocation):
     for iFile, File in enumerate(Files):
         # load only the image files, load the labels separately
         if not 'label' in File:
-
-            if File == 'mr_train_1001_image.nii.gz':
-                # set this file up as the one to coregister to
-                NIIFile1 = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, File))
-                cSlicer = cSliceNDice(NIIFile1)
-                NIIFile1 = cSlicer.fRotate(5)
-                NIIFile1 = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
-                print('Reference file ' + File + ' is cropped')
-                sitk.WriteImage(NIIFile1, os.path.join(
-                    '/project/hackathon/hackers09/shared/Data/Vishal', (File[:-7] + 'CoregTest.nii.gz')))
-
-                # transform the label file the same
-                LabelFile=File[:-12]+'label.nii.gz'
-                NIIFileLabel1 = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, LabelFile))
-                cSlicer = cSliceNDice(NIIFileLabel1)
-
-                NIIFileLabel1 = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
-                print('Reference Label file ' + File + ' is cropped')
-                sitk.WriteImage(NIIFileLabel1, os.path.join(
-                    '/project/hackathon/hackers09/shared/Data/Vishal', (File[:-12] + 'labelCoregTest.nii.gz')))
-
-
-            else:
                 # coregister to the above file
                 LabelFile=File[:-12]+'label.nii.gz'
                 NIIFile = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, File))
-                NIIFileLabel = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, LabelFile))
+#                NIIFileLabel = Preprocesser.fFetchRawDataFile(os.path.join(Preprocesser.TrainDataLocation, LabelFile))
+                #NIIFile = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
                 cSlicer = cSliceNDice(NIIFile)
-                NIIFile = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
-                cSlicer = cSliceNDice(NIIFileLabel)
-
-                NIIFileLabel = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
+                #NIIFile = cSlicer.fWarpIDv2()
+                NIIFile = cSlicer.fRotate()
+                #NIIFile = cSlicer.fJitterv2()
+                #NIIFile = cSlicer.fJitter('any')
+                #NIIFileLabel = cSlicer.fPatch(aCenter=[296, 260, 80], iSize=64, aLimits=[128, 128, 64])
                 print('File number ' + str(iFile) + ' and its label are cropped')
-                NIICoreg, NIICoregLabel = fCoregister(NIIFile1, NIIFile, NIIFileLabel)
+                #NIICoreg, NIICoregLabel = fCoregister(NIIFile1, NIIFile, NIIFileLabel)
                 print('File number ' + str(iFile) + ' and its label are coregistered')
-                sitk.WriteImage(NIICoreg, os.path.join('/project/hackathon/hackers09/shared/Data/Vishal', (File[:-7] + 'CoregTest.nii.gz')))
+                sitk.WriteImage(NIIFile, os.path.join('/project/hackathon/hackers09/shared/Data/Vishal', (File[:-7] + 'WarpTest.nii.gz')))
                 #sitk.WriteImage(NIICoreg, os.path.join(
                  #   '/project/bioinformatics/DLLab/shared/Collab-Aashoo/'
                   #  'WholeHeartSegmentation/CoregTestAll', (File[:-7] + 'CoregTest.nii.gz')))
-                sitk.WriteImage(NIICoregLabel, os.path.join('/project/hackathon/hackers09/shared/Data/Vishal',
-                                                       (File[:-12] + 'labelCoregTest.nii.gz')))
+              #  sitk.WriteImage(NIIFileLabel, os.path.join('/project/hackathon/hackers09/shared/Data/Vishal',
+                                                       #(File[:-12] + 'labelCoregTest2.nii.gz')))
                # sitk.WriteImage(NIICoregLabel, os.path.join(
                 #    '/project/bioinformatics/DLLab/shared/Collab-Aashoo/'
                  #   'WholeHeartSegmentation/CoregTestAll', (File[:-12] + 'labelCoregTest.nii.gz')))
