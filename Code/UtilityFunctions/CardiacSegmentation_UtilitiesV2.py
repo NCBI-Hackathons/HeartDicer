@@ -310,7 +310,7 @@ class cPreprocess(object):
         print(HeartCenter)
 
         NIIResampled = sitk.ResampleImageFilter()
-        NIIResampled.SetOutputOrigin(HeartCenter)
+        NIIResampled.SetOutputOrigin(NIIFile.GetOrigin())
         # NIIResampled.SetInterpolator(sitk.sitkNearestNeighbor)
         # print("Original")
         # print(NIIFile.GetSize())
@@ -605,7 +605,7 @@ boxDimensions = [boxHeight,boxWidth,boxDepth]
 print(boxDimensions)
 print(dCenters)
 
-Image01 ='mr_train_1001_image.nii.gz'
+Image01 ='mr_train_1018_image.nii.gz'
 outDir = '/project/hackathon/hackers09/shared/Data/mr_train_resizedV3'
 Preprocesser.fSaveITKV2(Image01,outDir,dCenters[1], boxDimensions)
 

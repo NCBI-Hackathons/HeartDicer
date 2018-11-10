@@ -405,7 +405,7 @@ class cSliceNDice(object):
         """
         # Change Theta and Phi to radians
         #flMaxTheta = random.uniform(0,15)
-        flMaxTheta = .05
+        flMaxTheta = .001
         flMaxTheta=flMaxTheta*np.pi/180
 
 
